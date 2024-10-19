@@ -12,10 +12,10 @@ class ClientHandler(threading.Thread):
 
     def run(self):
         try:
-            self.client_socket.sendall(b'Enter your username: ')
+            self.client_socket.sendall(b'')
             username = self.client_socket.recv(1024).decode().strip()
 
-            self.client_socket.sendall(b'Enter your password: ')
+            self.client_socket.sendall(b'')
             password = self.client_socket.recv(1024).decode().strip()
 
             if self.server.authenticate(username, password):
@@ -39,7 +39,7 @@ class ClientHandler(threading.Thread):
             self.client_socket.close()
 
 class TCPServer:
-    def __init__(self, host='127.0.0.1', port=65432):
+    def __init__(self, host='10.5.102.82', port=65432):
         self.server_address = (host, port)
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.clients = []
