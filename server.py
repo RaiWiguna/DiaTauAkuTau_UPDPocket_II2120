@@ -12,13 +12,15 @@ class ClientHandler(threading.Thread):
 
     def run(self):
         try:
+            # Request username
             self.client_socket.sendall(b'')
             username = self.client_socket.recv(1024).decode().strip()
 
+            # Request password
             self.client_socket.sendall(b'')
             password = self.client_socket.recv(1024).decode().strip()
 
-            if self.server.authenticate(username, password):
+            if self.server.authenticate(password):
                 self.username = username
                 self.is_authenticated = True
                 self.client_socket.sendall(b'Login successful! Welcome to the chatroom.\n')
@@ -31,7 +33,7 @@ class ClientHandler(threading.Thread):
                         print(formatted_message)
                         self.server.broadcast(formatted_message, self)
             else:
-                self.client_socket.sendall(b'Login failed. Incorrect username or password.\n')
+                self.client_socket.sendall(b'Login failed. Incorrect password.\n')
         except ConnectionResetError:
             pass
         finally:
@@ -39,16 +41,11 @@ class ClientHandler(threading.Thread):
             self.client_socket.close()
 
 class TCPServer:
-    def __init__(self, host='10.5.102.82', port=65432):
+    def __init__(self, host='127.0.0.1', port=65432):
         self.server_address = (host, port)
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.clients = []
-        self.users = {
-            'admin': 'admin123',
-            'user1': 'password1',
-            'Rai': 'Rai12',
-            'Timy':'Timy12'
-        }
+        self.global_password = 'globalpass123'  # Single global password
 
     def start_server(self):
         self.server_socket.bind(self.server_address)
@@ -76,9 +73,10 @@ class TCPServer:
             if client.is_authenticated:
                 self.broadcast(f'{client.username} has left the chat.', client)
     
-    def authenticate(self, username, password):
-        return username in self.users and self.users[username] == password
+    def authenticate(self, password):
+        return password == self.global_password
 
 if __name__ == '__main__':
     server = TCPServer()
     server.start_server()
+

@@ -5,7 +5,7 @@ class TCPClient:
     def __init__(self, host, port):
         self.server_address = (host, port)
         self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.connected = False  # Flag untuk menandakan apakah client masih terhubung
+        self.connected = False
 
     def connect(self):
         try:
@@ -24,7 +24,7 @@ class TCPClient:
         self.send_message(password)
 
     def send_message(self, message):
-        if self.connected:  # Pastikan client masih terhubung sebelum mengirim pesan
+        if self.connected:
             self.client_socket.sendall(message.encode())
 
     def receive_messages(self):
@@ -35,8 +35,7 @@ class TCPClient:
                     message_decoded = message.decode().strip()
                     print(message_decoded)
 
-                    # Jika login gagal, tanyakan apakah mau login ulang atau keluar
-                    if message_decoded == "Login failed. Incorrect username or password.":
+                    if message_decoded == "Login failed. Incorrect password.":
                         retry = input("Apakah Anda ingin login lagi? (y/n): ").strip().lower()
                         if retry == 'y':
                             username = input("Masukkan username: ")
@@ -44,14 +43,14 @@ class TCPClient:
                             self.login(username, password)
                         else:
                             print("Keluar dari program...")
-                            self.close()  # Tutup koneksi
+                            self.close()
                             break
             except ConnectionResetError:
                 print("Terputus dari server.")
                 break
 
     def close(self):
-        self.connected = False  # Update flag agar program tahu bahwa client telah keluar
+        self.connected = False
         self.client_socket.close()
 
 if __name__ == '__main__':
@@ -65,10 +64,10 @@ if __name__ == '__main__':
         password = input("Masukkan password: ")
         client.login(username, password)
 
-        while client.connected:  # Cek apakah client masih terhubung
+        while client.connected:
             message = input()
             if message.lower() == 'exit':
                 client.close()
                 break
             client.send_message(message)
-
+            
