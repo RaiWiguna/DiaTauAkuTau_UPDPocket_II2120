@@ -3,188 +3,141 @@ import threading
 import tkinter as tk
 from tkinter import scrolledtext, messagebox
 
-class TCPClient:
-    def __init__(self, log_func, login_success_func, disable_inputs_func):
-        self.server_address = None
-        self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.connected = False
-        self.log_func = log_func
-        self.login_success_func = login_success_func
-        self.disable_inputs_func = disable_inputs_func
-        self.is_logged_in = False
+class ClientHandler(threading.Thread):
+    def __init__(self, client_socket, client_address, server):
+        super().__init__()
+        self.client_socket = client_socket
+        self.client_address = client_address
+        self.server = server
+        self.username = None
+        self.is_authenticated = False
 
-    def connect(self, host, port):
-        self.server_address = (host, port)
+    def run(self):
         try:
-            self.client_socket.connect(self.server_address)
-            self.connected = True
-            self.log_func("Connected to server.")
-            self.receive_thread = threading.Thread(target=self.receive_messages, daemon=True)
-            self.receive_thread.start()
-            return True
-        except (ConnectionRefusedError, OSError):
-            self.log_func("Failed to connect to server.")
-            self.disable_inputs_func()  # Disable inputs if the connection fails
-            return False
+            self.client_socket.sendall(b'Enter username:\n')
+            username = self.client_socket.recv(1024).decode().strip()
 
-    def login(self, username, password):
-        self.send_message(username)
-        self.send_message(password)
+            self.client_socket.sendall(b'Enter password:\n')
+            password = self.client_socket.recv(1024).decode().strip()
 
-    def send_message(self, message):
-        if self.connected:
-            self.client_socket.sendall(message.encode())
+            if self.server.authenticate(username, password):
+                self.username = username
+                self.is_authenticated = True
+                self.client_socket.sendall(b'Login successful! Welcome to the chatroom.\n')
+                self.server.log_func(f'{self.username} has joined the chat!')
+                self.server.broadcast(f'{self.username} has joined the chat!', self)
 
-    def receive_messages(self):
-        while self.connected:
+                while True:
+                    message = self.client_socket.recv(1024).decode().strip()
+                    if message:
+                        formatted_message = f'{self.username}: {message}'
+                        self.server.log_func(formatted_message)
+                        self.server.broadcast(formatted_message, self)
+            else:
+                self.client_socket.sendall(b'Login failed. Incorrect username or password.\n')
+        except ConnectionResetError:
+            pass
+        finally:
+            self.server.remove_client(self)
+            self.client_socket.close()
+
+class TCPServer(threading.Thread):
+    def __init__(self, host='127.0.0.1', port=65432, log_func=None):
+        super().__init__()
+        self.server_address = (host, port)
+        self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.clients = []
+        self.global_password = 'globalpass123'
+        self.log_func = log_func
+        self.running = True
+
+    def run(self):
+        self.server_socket.bind(self.server_address)
+        self.server_socket.listen(5)
+        self.log_func(f'Server started on {self.server_address[0]}:{self.server_address[1]}')
+
+        while self.running:
             try:
-                message = self.client_socket.recv(1024)
-                if message:
-                    message_decoded = message.decode().strip()
-                    if message_decoded == "Login successful! Welcome to the chatroom.":
-                        self.is_logged_in = True
-                        self.login_success_func()
-                    else:
-                        self.log_func(message_decoded)
-            except ConnectionResetError:
-                self.log_func("Disconnected from server.")
-                self.disable_inputs_func()  # Disable inputs if disconnected
+                client_socket, client_address = self.server_socket.accept()
+                self.log_func(f'Connection from {client_address}')
+                client_handler = ClientHandler(client_socket, client_address, self)
+                self.clients.append(client_handler)
+                client_handler.start()
+            except OSError:
                 break
 
-    def close(self):
-        self.connected = False
-        self.client_socket.close()
+    def broadcast(self, message, sender=None):
+        for client in self.clients:
+            if client != sender and client.is_authenticated:
+                try:
+                    client.client_socket.sendall(message.encode() + b'\n')
+                except:
+                    self.remove_client(client)
 
-def start_client_gui():
+    def remove_client(self, client):
+        if client in self.clients:
+            self.clients.remove(client)
+            if client.is_authenticated:
+                self.broadcast(f'{client.username} has left the chat.', client)
+
+    def authenticate(self, username, password):
+        return password == self.global_password
+
+    def stop_server(self):
+        self.running = False
+        self.broadcast('Server is shutting down...')
+        self.server_socket.close()
+        self.log_func('Server stopped.')
+
+def start_server_gui():
     def log_message(message):
-        chat_box.config(state='normal')
-        chat_box.insert('end', message + '\n')
-        chat_box.see('end')
-        chat_box.config(state='disabled')
+        log_box.config(state='normal')
+        log_box.insert('end', message + '\n')
+        log_box.see('end')
+        log_box.config(state='disabled')
 
-    def connect_to_server():
+    def start_server():
         host = ip_entry.get().strip()
-        port_str = port_entry.get().strip()
+        port = int(port_entry.get().strip())
+        global server
+        server = TCPServer(host=host, port=port, log_func=log_message)
+        server.start()
+        start_button.config(state='disabled')
+        stop_button.config(state='normal')
 
-        # Validate IP and port
-        if not validate_ip(host):
-            log_message("Invalid IP address.")
-            return
-        if not validate_port(port_str):
-            log_message("Invalid port number.")
-            return
-
-        port = int(port_str)
-        if client.connect(host, port):
-            login_button.config(state='normal')
-            connect_button.config(state='disabled')
-
-    def validate_ip(ip):
-        try:
-            socket.inet_aton(ip)  # Check if IP is valid
-            return True
-        except socket.error:
-            return False
-
-    def validate_port(port):
-        return port.isdigit() and 0 <= int(port) <= 65535  # Port must be an integer in valid range
-
-    def login_to_server():
-        username = username_entry.get().strip()
-        password = password_entry.get().strip()
-
-        if not username or not password:
-            log_message("Username and password cannot be empty.")
-            return
-
-        client.login(username, password)
-
-    def login_successful():
-        log_message("Login successful! Welcome to the chatroom.")
-        root.after(3000, clear_login_message)  # Clear message after 3 seconds
-        username_entry.config(state='disabled')
-        password_entry.config(state='disabled')
-        chat_frame.pack(padx=10, pady=10)  # Show chat room frame
-
-    def clear_login_message():
-        chat_box.config(state='normal')
-        chat_box.delete('1.0', 'end')
-        chat_box.config(state='disabled')
-
-    def send_chat_message(event=None):  # Modified to handle "Enter" key
-        message = message_entry.get().strip()
-        if message:
-            client.send_message(message)
-            log_message(f'You: {message}')  # Display user message in the chat
-            message_entry.delete(0, 'end')
-        if message.lower() == 'exit':
-            client.close()
-            root.quit()
-
-    def toggle_password_visibility():
-        if password_entry.cget('show') == '*':
-            password_entry.config(show='')
-            root.after(3000, lambda: password_entry.config(show='*'))  # Hide password after 3 seconds
-        else:
-            password_entry.config(show='*')
-
-    def disable_inputs():
-        username_entry.config(state='disabled')
-        password_entry.config(state='disabled')
-        connect_button.config(state='disabled')
-        login_button.config(state='disabled')
-        message_entry.config(state='disabled')
-        send_button.config(state='disabled')
-
-    client = TCPClient(log_func=log_message, login_success_func=login_successful, disable_inputs_func=disable_inputs)
+    def stop_server():
+        if server:
+            server.stop_server()
+            stop_button.config(state='disabled')
+            start_button.config(state='normal')
 
     root = tk.Tk()
-    root.title("Client GUI")
+    root.title("Server GUI")
 
-    # Connection Frame
-    connection_frame = tk.Frame(root)
-    connection_frame.pack(padx=10, pady=10)
+    frame = tk.Frame(root)
+    frame.pack(padx=10, pady=10)
 
-    tk.Label(connection_frame, text="IP:").grid(row=0, column=0, sticky='e')
-    ip_entry = tk.Entry(connection_frame)
+    tk.Label(frame, text="IP:").grid(row=0, column=0, sticky='e')
+    ip_entry = tk.Entry(frame)
     ip_entry.grid(row=0, column=1, padx=5, pady=5)
+    ip_entry.insert(0, "127.0.0.1")
 
-    tk.Label(connection_frame, text="Port:").grid(row=1, column=0, sticky='e')
-    port_entry = tk.Entry(connection_frame)
+    tk.Label(frame, text="Port:").grid(row=1, column=0, sticky='e')
+    port_entry = tk.Entry(frame)
     port_entry.grid(row=1, column=1, padx=5, pady=5)
+    port_entry.insert(0, "65432")
 
-    connect_button = tk.Button(connection_frame, text="Connect", command=connect_to_server)
-    connect_button.grid(row=2, columnspan=2, pady=5)
+    start_button = tk.Button(frame, text="Start Server", command=start_server)
+    start_button.grid(row=2, column=0, pady=5)
 
-    # Login Frame
-    tk.Label(connection_frame, text="Username:").grid(row=3, column=0, sticky='e')
-    username_entry = tk.Entry(connection_frame)
-    username_entry.grid(row=3, column=1, padx=5, pady=5)
+    stop_button = tk.Button(frame, text="Stop Server", command=stop_server, state='disabled')
+    stop_button.grid(row=2, column=1, pady=5)
 
-    tk.Label(connection_frame, text="Password:").grid(row=4, column=0, sticky='e')
-    password_entry = tk.Entry(connection_frame, show='*')
-    password_entry.grid(row=4, column=1, padx=5, pady=5)
-
-    password_toggle = tk.Button(connection_frame, text="Show Password", command=toggle_password_visibility)
-    password_toggle.grid(row=4, column=2, padx=5)
-
-    login_button = tk.Button(connection_frame, text="Login", command=login_to_server, state='disabled')
-    login_button.grid(row=5, columnspan=2, pady=5)
-
-    # Chat Frame (Initially hidden)
-    chat_frame = tk.Frame(root)
-
-    chat_box = scrolledtext.ScrolledText(chat_frame, width=60, height=20, state='disabled')
-    chat_box.pack(padx=10, pady=10)
-
-    message_entry = tk.Entry(chat_frame, width=50)
-    message_entry.pack(side='left', padx=10, pady=10)
-    message_entry.bind('<Return>', send_chat_message)  # Bind "Enter" key to send message
-
-    send_button = tk.Button(chat_frame, text="Send", command=send_chat_message)
-    send_button.pack(side='left', padx=5, pady=10)
+    log_box = scrolledtext.ScrolledText(root, width=60, height=20, state='disabled')
+    log_box.pack(padx=10, pady=10)
 
     root.mainloop()
 
 if __name__ == '__main__':
-    start_client_gui()
+    start_server_gui()
