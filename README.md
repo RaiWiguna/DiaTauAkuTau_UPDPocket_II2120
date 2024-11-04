@@ -6,4 +6,4 @@
 
 ---
 ## Catatan :
-Kami membuat versi UDP dari program yang disertakan pada UDP_Version, sebagai bentuk pertanggung jawaban atas kelalaian yang kami buat. Kami tetap menghormati segala proses penilaian yang dilakukan asisten. Terimakasi Kak atas bimbingannya, kami memohon maaf atas kelalaian kami. 
+Kami membuat versi UDP dari program yang disertakan pada UDP_Version sebagai bentuk pertanggung jawaban atas kelalaian yang kami buat. Kami tetap menghormati segala proses penilaian yang dilakukan asisten praktikum. Terimakasi Kak atas bimbingannya, kami memohon maaf atas kelalaian kami. 
