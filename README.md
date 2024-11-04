@@ -3,3 +3,7 @@
 2. Setelah server berjalan, maka dijalankan program user.py dengan memasukkan ip dan port yang telah distart pada server.py
 3. Masukan username, lalu masukkan passwrod "globalpass123"
 4. Program akan berjalan dan dapat dilakukan chat dengan mengetikkan chat yang ingin dimasukkan dan memencet tombol send.
+
+---
+## Catatan :
+Kami membuat versi UDP dari program yang disertakan pada UDP_Version, sebagai bentuk pertanggung jawaban atas kelalaian yang kami buat. Kami tetap menghormati segala proses penilaian yang dilakukan asisten. Terimakasi Kak atas bimbingannya, kami memohon maaf atas kelalaian kami. 
